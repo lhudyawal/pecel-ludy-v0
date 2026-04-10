@@ -181,6 +181,22 @@ To implement the generated documentation from CodeGuide:
 
 3. These documentation files will be automatically tracked by git and can be used as a reference for your project's features and implementation details.
 
+## Deployment
+
+Ready to deploy to production? Check out our comprehensive guides:
+
+- **[Deployment Guide](./DEPLOYMENT_GUIDE.md)** - Complete deployment instructions for GitHub, Vercel, Railway, and more
+- **[Deployment Checklist](./DEPLOYMENT_CHECKLIST.md)** - Pre and post-deployment checklist
+- **[Environment Variables](./.env.example)** - Required environment variables template
+
+### Quick Deploy to Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/lhudyawal/pecel-ludy-v0)
+
+1. Click the button above
+2. Configure environment variables
+3. Deploy!
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

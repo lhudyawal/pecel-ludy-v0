@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod *)",
+      "Bash(bash *)",
+      "Bash(cat)",
+      "Bash(\"src/app/dashboard/verification/page.tsx\")",
+      "Bash(\"src/app/dashboard/shops/page.tsx\")",
+      "Bash(\"src/app/dashboard/transactions/page.tsx\")",
+      "Bash(\"src/app/dashboard/visits/page.tsx\")",
+      "Bash(\"src/app/dashboard/salary/page.tsx\")",
+      "Bash(do)",
+      "Bash(done)",
+      "Bash(eof)",
+      "Bash(/tmp/fix-pages.sh)",
+      "Bash(grep *)",
+      "Bash(sleep *)",
+      "Bash(curl *)",
+      "Bash(lsof *)",
+      "Bash(xargs *)",
+      "Bash(true)",
+      "Bash(node *)"
+    ]
+  },
+  "$version": 3
+}
