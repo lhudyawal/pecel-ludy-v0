@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Calendar as CalendarIcon, Printer, MapPin, Phone, Store, CheckCircle2 } from "lucide-react";
+import { Calendar as CalendarIcon, Printer, MapPin, Phone, Store, CheckCircle2, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import { toast } from "sonner";
@@ -45,6 +45,14 @@ interface RencanaKunjungan {
   tanggal_rencana: string;
   is_completed: boolean;
   toko: Toko;
+}
+
+interface TransactionData {
+  id: string;
+  product_name: string;
+  quantity: number;
+  total_harga: number;
+  created_at: string;
 }
 
 export default function VisitsPage() {
@@ -155,9 +163,37 @@ export default function VisitsPage() {
     }
   };
 
-  const handlePrintPlan = () => {
+  const handlePrintPlan = async () => {
     const dateStr = format(selectedDate, "dd MMMM yyyy", { locale: id });
     const shopsToPrint = visitPlans.map((p) => p.toko);
+    const shopIds = visitPlans.map((p) => p.toko_id);
+
+    // Fetch transactions for these shops on the selected date
+    const transactionsByShop: Record<string, TransactionData[]> = {};
+    
+    for (const shopId of shopIds) {
+      const { data: transData } = await supabase
+        .from("transaksi")
+        .select(`
+          id,
+          quantity,
+          total_harga,
+          created_at,
+          product:products(name)
+        `)
+        .eq("toko_id", shopId)
+        .eq("sales_id", user!.id)
+        .gte("created_at", `${format(selectedDate, "yyyy-MM-dd")}T00:00:00`)
+        .lte("created_at", `${format(selectedDate, "yyyy-MM-dd")}T23:59:59`);
+
+      transactionsByShop[shopId] = (transData || []).map(t => ({
+        id: t.id,
+        product_name: (t.product as any)?.name || "Produk",
+        quantity: t.quantity,
+        total_harga: t.total_harga,
+        created_at: t.created_at,
+      }));
+    }
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
@@ -175,12 +211,24 @@ export default function VisitsPage() {
           .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #ea580c; padding-bottom: 15px; }
           .header h1 { color: #ea580c; margin: 0; }
           .header p { margin: 5px 0; color: #666; }
-          .shop { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; page-break-inside: avoid; }
-          .shop h3 { margin: 0 0 10px 0; color: #ea580c; }
-          .shop-info { display: grid; grid-template-columns: 100px 1fr; gap: 5px; font-size: 14px; }
+          .shop { margin-bottom: 25px; page-break-inside: avoid; }
+          .shop-header { background: #f9f9f9; padding: 10px; border-left: 4px solid #ea580c; margin-bottom: 10px; }
+          .shop h3 { margin: 0 0 5px 0; color: #ea580c; }
+          .shop-info { display: grid; grid-template-columns: 100px 1fr; gap: 5px; font-size: 13px; margin-bottom: 10px; }
           .label { font-weight: bold; color: #666; }
-          .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #999; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+          table th { background: #ea580c; color: white; padding: 8px; text-align: left; }
+          table td { padding: 6px 8px; border-bottom: 1px solid #ddd; }
+          table tr:nth-child(even) { background: #f9f9f9; }
+          .no-transactions { color: #999; font-style: italic; padding: 10px; background: #f9f9f9; border-left: 3px solid #ddd; }
+          .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #999; border-top: 2px solid #ea580c; padding-top: 15px; }
           .checkbox { margin-left: 10px; }
+          .summary { background: #f0f9ff; padding: 10px; margin-bottom: 20px; border-radius: 5px; }
+          .summary h4 { margin: 0 0 10px 0; color: #0369a1; }
+          .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center; }
+          .summary-item { padding: 8px; }
+          .summary-value { font-size: 20px; font-weight: bold; color: #0369a1; }
+          .summary-label { font-size: 11px; color: #666; }
           @media print { body { margin: 0; } }
         </style>
       </head>
@@ -191,22 +239,79 @@ export default function VisitsPage() {
           <p><strong>${dateStr}</strong></p>
           <p>Sales: ${user!.full_name}</p>
         </div>
-        ${shopsToPrint.map((shop, idx) => `
-          <div class="shop">
-            <h3>${idx + 1}. ${shop.nama_toko} <span class="checkbox">☐</span></h3>
-            <div class="shop-info">
-              <span class="label">Pemilik:</span>
-              <span>${shop.pemilik}</span>
-              <span class="label">Alamat:</span>
-              <span>${shop.jalan}${shop.no ? " No. " + shop.no : ""}, RT ${shop.rt || "-"}/RW ${shop.rw || "-"}</span>
-              <span></span>
-              <span>${shop.desa ? shop.desa + ", " : ""}${shop.kecamatan ? shop.kecamatan + ", " : ""}${shop.kota}</span>
-              <span></span>
-              <span>${shop.provinsi}</span>
-              ${shop.phone ? `<span class="label">Telepon:</span><span>${shop.phone}</span>` : ""}
+
+        <div class="summary">
+          <h4>Ringkasan Kunjungan</h4>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <div class="summary-value">${shopsToPrint.length}</div>
+              <div class="summary-label">Toko Dikunjungi</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-value">${Object.values(transactionsByShop).flat().length}</div>
+              <div class="summary-label">Total Transaksi</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-value">Rp ${Object.values(transactionsByShop).flat().reduce((sum, t) => sum + t.total_harga, 0).toLocaleString('id-ID')}</div>
+              <div class="summary-label">Total Penjualan</div>
             </div>
           </div>
-        `).join("")}
+        </div>
+
+        ${shopsToPrint.map((shop, idx) => {
+          const transactions = transactionsByShop[shop.id] || [];
+          const totalTrans = transactions.reduce((sum, t) => sum + t.total_harga, 0);
+          
+          return `
+          <div class="shop">
+            <div class="shop-header">
+              <h3>${idx + 1}. ${shop.nama_toko} <span class="checkbox">☐</span></h3>
+              <div class="shop-info">
+                <span class="label">Pemilik:</span>
+                <span>${shop.pemilik}</span>
+                <span class="label">Alamat:</span>
+                <span>${shop.jalan}${shop.no ? " No. " + shop.no : ""}, RT ${shop.rt || "-"}/RW ${shop.rw || "-"}</span>
+                <span></span>
+                <span>${shop.desa ? shop.desa + ", " : ""}${shop.kecamatan ? shop.kecamatan + ", " : ""}${shop.kota}</span>
+                <span></span>
+                <span>${shop.provinsi}</span>
+                ${shop.phone ? `<span class="label">Telepon:</span><span>${shop.phone}</span>` : ""}
+              </div>
+            </div>
+
+            ${transactions.length > 0 ? `
+              <table>
+                <thead>
+                  <tr>
+                    <th>No</th>
+                    <th>Produk</th>
+                    <th>Qty</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${transactions.map((trans, transIdx) => `
+                    <tr>
+                      <td>${transIdx + 1}</td>
+                      <td>${trans.product_name}</td>
+                      <td>${trans.quantity}</td>
+                      <td>Rp ${trans.total_harga.toLocaleString('id-ID')}</td>
+                    </tr>
+                  `).join('')}
+                  <tr style="background: #f0f9ff; font-weight: bold;">
+                    <td colspan="3" style="text-align: right;">Total:</td>
+                    <td>Rp ${totalTrans.toLocaleString('id-ID')}</td>
+                  </tr>
+                </tbody>
+              </table>
+            ` : `
+              <div class="no-transactions">
+                Belum ada transaksi pada tanggal ini
+              </div>
+            `}
+          </div>
+        `}).join('')}
+
         <div class="footer">
           <p>Dicetak pada: ${format(new Date(), "dd MMMM yyyy HH:mm", { locale: id })}</p>
           <p>SAMBEL PECEL LUDY - Sistem Penjualan</p>

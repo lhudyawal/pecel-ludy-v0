@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { ShoppingCart, Plus, Minus, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ShoppingCart, Plus, Minus, Trash2, Edit2, AlertTriangle } from "lucide-react";
 import { formatCurrency } from "@/lib/helpers";
 import { toast } from "sonner";
 
@@ -55,6 +56,11 @@ export default function TransactionsPage() {
   const [notes, setNotes] = useState("");
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingTransaction, setEditingTransaction] = useState<any>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingTransaction, setDeletingTransaction] = useState<any>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editQuantity, setEditQuantity] = useState(1);
 
   useEffect(() => {
     if (clerkUser) {
@@ -208,6 +214,57 @@ export default function TransactionsPage() {
       fetchData();
     } catch (error: any) {
       toast.error("Gagal menyimpan transaksi: " + error.message);
+    }
+  };
+
+  const handleEdit = (transaction: any) => {
+    setEditingTransaction(transaction);
+    setEditQuantity(transaction.quantity);
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!editingTransaction) return;
+
+    try {
+      const newTotal = editingTransaction.product.price * editQuantity;
+      
+      const { error } = await supabase
+        .from("transaksi")
+        .update({
+          quantity: editQuantity,
+          total_harga: newTotal,
+        })
+        .eq("id", editingTransaction.id);
+
+      if (error) throw error;
+
+      toast.success("Transaksi berhasil diupdate!");
+      setEditDialogOpen(false);
+      setEditingTransaction(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error("Gagal mengupdate transaksi: " + error.message);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingTransaction) return;
+
+    try {
+      const { error } = await supabase
+        .from("transaksi")
+        .delete()
+        .eq("id", deletingTransaction.id);
+
+      if (error) throw error;
+
+      toast.success("Transaksi berhasil dihapus!");
+      setDeleteDialogOpen(false);
+      setDeletingTransaction(null);
+      fetchData();
+    } catch (error: any) {
+      toast.error("Gagal menghapus transaksi: " + error.message);
     }
   };
 
@@ -408,9 +465,32 @@ export default function TransactionsPage() {
                             })}
                           </p>
                         </div>
-                        <p className="font-semibold text-orange-600">
-                          {formatCurrency(transaction.total_harga)}
-                        </p>
+                        <div className="flex flex-col items-end gap-1">
+                          <p className="font-semibold text-orange-600">
+                            {formatCurrency(transaction.total_harga)}
+                          </p>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2"
+                              onClick={() => handleEdit(transaction)}
+                            >
+                              <Edit2 className="w-3 h-3 text-blue-600" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2"
+                              onClick={() => {
+                                setDeletingTransaction(transaction);
+                                setDeleteDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="w-3 h-3 text-red-600" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -425,6 +505,155 @@ export default function TransactionsPage() {
           </Card>
         </div>
       </div>
+
+      {/* Edit Transaction Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit2 className="w-5 h-5" />
+              Edit Transaksi
+            </DialogTitle>
+            <DialogDescription>
+              Ubah jumlah produk untuk transaksi ini
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingTransaction && (
+            <div className="space-y-4">
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-medium mb-2">Detail Transaksi</h4>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Toko:</span>
+                    <span className="font-medium">{editingTransaction.toko?.nama_toko}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Produk:</span>
+                    <span className="font-medium">{editingTransaction.product?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Harga:</span>
+                    <span className="font-medium">{formatCurrency(editingTransaction.product?.price)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-qty">Jumlah Produk</Label>
+                <div className="flex items-center gap-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setEditQuantity(Math.max(1, editQuantity - 1))}
+                  >
+                    <Minus className="w-4 h-4" />
+                  </Button>
+                  <Input
+                    id="edit-qty"
+                    type="number"
+                    value={editQuantity}
+                    onChange={(e) => setEditQuantity(parseInt(e.target.value) || 1)}
+                    className="w-24 text-center"
+                    min="1"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setEditQuantity(editQuantity + 1)}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="p-3 bg-orange-50 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Total Baru:</span>
+                  <span className="text-2xl font-bold text-orange-600">
+                    {formatCurrency(editingTransaction.product?.price * editQuantity)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setEditDialogOpen(false)}
+                  className="flex-1"
+                >
+                  Batal
+                </Button>
+                <Button
+                  onClick={handleUpdate}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700"
+                >
+                  Update
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              Hapus Transaksi
+            </DialogTitle>
+            <DialogDescription>
+              Apakah Anda yakin ingin menghapus transaksi ini?
+            </DialogDescription>
+          </DialogHeader>
+
+          {deletingTransaction && (
+            <div className="space-y-4">
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <h4 className="font-medium mb-2 text-red-900">Detail Transaksi</h4>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Toko:</span>
+                    <span className="font-medium">{deletingTransaction.toko?.nama_toko}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Produk:</span>
+                    <span className="font-medium">{deletingTransaction.product?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Jumlah:</span>
+                    <span className="font-medium">{deletingTransaction.quantity}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Total:</span>
+                    <span className="font-semibold text-red-600">{formatCurrency(deletingTransaction.total_harga)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setDeleteDialogOpen(false)}
+                  className="flex-1"
+                >
+                  Batal
+                </Button>
+                <Button
+                  onClick={handleDelete}
+                  variant="destructive"
+                  className="flex-1"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Hapus
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
