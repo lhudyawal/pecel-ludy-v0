@@ -97,17 +97,38 @@ export default function TransactionsPage() {
         .eq("is_active", true)
         .order("name");
 
-      const { data: transactionsData } = await supabase
+      // Fetch transactions with proper joins
+      const { data: transactionsData, error } = await supabase
         .from("transaksi")
-        .select("*, toko:nama_toko, product:name")
+        .select(`
+          *,
+          toko:toko(
+            id,
+            nama_toko,
+            pemilik,
+            kota
+          ),
+          product:products(
+            id,
+            name,
+            size,
+            price
+          )
+        `)
         .eq("sales_id", user!.id)
         .order("created_at", { ascending: false })
         .limit(50);
+
+      if (error) {
+        console.error("Error fetching transactions:", error);
+        toast.error("Gagal memuat data transaksi: " + error.message);
+      }
 
       setShops(shopsData || []);
       setProducts(productsData || []);
       setTransactions(transactionsData || []);
     } catch (error: any) {
+      console.error("Error in fetchData:", error);
       toast.error("Gagal memuat data: " + error.message);
     } finally {
       setLoading(false);
@@ -362,16 +383,29 @@ export default function TransactionsPage() {
               {loading ? (
                 <div className="text-center py-8 text-gray-500">Memuat data...</div>
               ) : transactions.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">Belum ada transaksi</div>
+                <div className="text-center py-8 text-gray-500">
+                  <ShoppingCart className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                  <p className="font-medium">Belum ada transaksi</p>
+                  <p className="text-sm mt-1">Mulai input transaksi pertama Anda</p>
+                </div>
               ) : (
                 <div className="space-y-3">
                   {transactions.slice(0, 20).map((transaction) => (
-                    <div key={transaction.id} className="p-3 rounded-lg border">
+                    <div key={transaction.id} className="p-3 rounded-lg border hover:border-orange-200 transition-colors">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <p className="font-medium text-sm">{transaction.toko?.nama_toko}</p>
+                          <p className="font-medium text-sm">{transaction.toko?.nama_toko || "Toko tidak diketahui"}</p>
                           <p className="text-xs text-gray-500">
-                            {transaction.product?.name} x{transaction.quantity}
+                            {transaction.product?.name || "Produk"} ({transaction.product?.size}) x{transaction.quantity}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {new Date(transaction.created_at).toLocaleDateString('id-ID', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
                           </p>
                         </div>
                         <p className="font-semibold text-orange-600">
@@ -380,6 +414,11 @@ export default function TransactionsPage() {
                       </div>
                     </div>
                   ))}
+                  {transactions.length > 20 && (
+                    <p className="text-center text-sm text-gray-500 pt-2">
+                      Menampilkan 20 dari {transactions.length} transaksi
+                    </p>
+                  )}
                 </div>
               )}
             </CardContent>

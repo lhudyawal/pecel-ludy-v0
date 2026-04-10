@@ -23,9 +23,9 @@ const parkinsans = Parkinsans({
 });
 
 export const metadata: Metadata = {
-  title: "CodeGuide Starter Kit",
+  title: "Pecel Ludy - Manajemen Penjualan",
   description:
-    "A modern Next.js starter with TypeScript, TailwindCSS, shadcn/ui, Vercel AI SDK, Clerk, and Supabase",
+    "Sistem Manajemen Penjualan Sambel Pecel Ludy",
 };
 
 export default function RootLayout({

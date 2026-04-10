@@ -54,6 +54,7 @@ export default function SalaryPage() {
     dailyAverage: 0,
   });
   const [workingDays, setWorkingDays] = useState({ total: 0, attended: 0 });
+  const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const { month, year } = getCurrentMonthYear();
   const daysInMonth = getDaysInMonth(month, year);
@@ -89,27 +90,71 @@ export default function SalaryPage() {
     try {
       const startOfMonth = new Date(year, month - 1, 1).toISOString();
 
-      // Get transactions this month
-      const { data: transData, error: transError } = await supabase
-        .from("transaksi")
-        .select("total_harga")
+      // Get ONLY VERIFIED transactions this month
+      // First get verified reports
+      const { data: verifiedReports, error: reportError } = await supabase
+        .from("laporan_harian")
+        .select("id, tanggal")
         .eq("sales_id", user!.id)
-        .gte("created_at", startOfMonth);
+        .eq("status_hadir", "hadir")
+        .not("verified_by", "is", null)
+        .gte("tanggal", `${year}-${String(month).padStart(2, "0")}-01`);
 
-      if (transError) throw transError;
+      if (reportError) {
+        console.error("Error fetching verified reports:", reportError);
+      }
 
-      const total = transData?.reduce((sum, t) => sum + Number(t.total_harga), 0) || 0;
-      const count = transData?.length || 0;
+      // Get transactions from verified report dates only
+      let total = 0;
+      let count = 0;
+      
+      if (verifiedReports && verifiedReports.length > 0) {
+        const verifiedDates = verifiedReports.map(r => r.tanggal);
+        
+        const { data: transData, error: transError } = await supabase
+          .from("transaksi")
+          .select("total_harga, created_at")
+          .eq("sales_id", user!.id)
+          .in("created_at::date", verifiedDates);
+
+        if (transError) {
+          console.error("Error fetching transactions:", transError);
+        } else {
+          // Filter to only include transactions within verified date ranges
+          const verifiedTransactions = transData?.filter(t => {
+            const transDate = new Date(t.created_at).toISOString().split('T')[0];
+            return verifiedDates.includes(transDate);
+          }) || [];
+
+          total = verifiedTransactions.reduce((sum, t) => sum + Number(t.total_harga), 0);
+          count = verifiedTransactions.length;
+        }
+      }
+
       const currentDay = new Date().getDate();
       const dailyAverage = currentDay > 0 ? total / currentDay : 0;
 
       setTransactions({ total, count, dailyAverage });
 
-      // Get attendance
-      const { data: attendanceData } = await supabase
+      // Get ONLY VERIFIED attendance (not pending or rejected)
+      const { data: attendanceData, error: attendanceError } = await supabase
         .from("laporan_harian")
         .select("tanggal")
         .eq("sales_id", user!.id)
+        .eq("status_hadir", "hadir")
+        .not("verified_by", "is", null)
+        .gte("tanggal", `${year}-${String(month).padStart(2, "0")}-01`);
+
+      if (attendanceError) {
+        console.error("Error fetching attendance:", attendanceError);
+      }
+
+      // Get pending reports count for display
+      const { data: pendingReports } = await supabase
+        .from("laporan_harian")
+        .select("id")
+        .eq("sales_id", user!.id)
+        .eq("verified_by", null)
         .eq("status_hadir", "hadir")
         .gte("tanggal", `${year}-${String(month).padStart(2, "0")}-01`);
 
@@ -117,6 +162,9 @@ export default function SalaryPage() {
         total: daysInMonth,
         attended: attendanceData?.length || 0,
       });
+
+      // Store pending count for display
+      setPendingCount(pendingReports?.length || 0);
     } catch (error: any) {
       toast.error("Gagal memuat data: " + error.message);
     } finally {
@@ -156,12 +204,17 @@ export default function SalaryPage() {
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Realisasi</CardTitle>
+              <CardTitle className="text-sm font-medium">Realisasi (Terverifikasi)</CardTitle>
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{formatCurrency(transactions.total)}</div>
               <p className="text-xs text-muted-foreground">{transactions.count} transaksi</p>
+              {pendingCount > 0 && (
+                <p className="text-xs text-orange-600 mt-1">
+                  ⏳ {pendingCount} laporan menunggu verifikasi
+                </p>
+              )}
             </CardContent>
           </Card>
 
@@ -189,6 +242,29 @@ export default function SalaryPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Pending Reports Notice */}
+        {pendingCount > 0 && (
+          <Card className="bg-orange-50 border-orange-200">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-orange-900">
+                    ⏳ Laporan Menunggu Verifikasi
+                  </h3>
+                  <p className="text-sm text-orange-800 mt-2">
+                    Anda memiliki <strong>{pendingCount} laporan</strong> yang belum diverifikasi oleh supervisor. 
+                    Penjualan dari laporan yang belum diverifikasi <strong>belum dihitung</strong> dalam target bulanan.
+                  </p>
+                  <p className="text-sm text-orange-700 mt-2">
+                    <strong>Tips:</strong> Segera kirim laporan harian dan minta supervisor untuk memverifikasi agar target terhitung.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Progress Card */}
         <Card>

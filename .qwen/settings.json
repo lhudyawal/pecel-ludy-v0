@@ -25,7 +25,8 @@
       "Bash(git push *)",
       "Bash(git pull *)",
       "Bash(git stash)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(npm outdated *)"
     ]
   },
   "$version": 3
