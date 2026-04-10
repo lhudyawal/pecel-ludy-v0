@@ -19,7 +19,13 @@
       "Bash(lsof *)",
       "Bash(xargs *)",
       "Bash(true)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git pull *)",
+      "Bash(git stash)",
+      "Bash(git stash *)"
     ]
   },
   "$version": 3
